@@ -6,5 +6,4 @@ all:
 	make -C /lib/modules/$(KVERSION)/build M=$(PWD) modules
 
 clean:
-	# make -C /lib/modules/$(KVERSION)/build M=$(PWD) clean seems not working
-	@rm *mod*; rm *o; rm Module.symvers
+	@rm *mod*; rm *o; rm Module.symvers; rm .c*
