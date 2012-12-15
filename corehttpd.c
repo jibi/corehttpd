@@ -19,6 +19,8 @@ init_listening_socket(unsigned int address, unsigned short port, int backlog) {
 	sin.sin_port = htons(port);
 
 	sock_create(PF_INET, SOCK_STREAM, IPPROTO_TCP, &sock);
+	sock->sk->sk_reuse = 1;
+
 	kernel_bind(sock, (struct sockaddr *) &sin, sizeof(sin));
 	kernel_listen(sock, backlog);
 
