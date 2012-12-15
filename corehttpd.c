@@ -18,7 +18,7 @@ init_listening_socket(unsigned int address, unsigned short port, int backlog) {
 	sin.sin_addr.s_addr = htonl(address);
 	sin.sin_port = htons(port);
 
-	sock_create(PF_UNIX, SOCK_STREAM, IPPROTO_TCP, &sock);
+	sock_create(PF_INET, SOCK_STREAM, IPPROTO_TCP, &sock);
 	kernel_bind(sock, (struct sockaddr *) &sin, sizeof(sin));
 	kernel_listen(sock, backlog);
 
@@ -30,6 +30,8 @@ handle_request(void *data) {
 	struct socket *sock;
 	struct msghdr msg;
 	struct iovec iov;
+	mm_segment_t oldfs;
+	int req_len;
 
 	char *buffer;
 
@@ -43,6 +45,11 @@ handle_request(void *data) {
 	iov.iov_len = (size_t) 1024 * sizeof(char);
 
 	sock = (struct socket *) data;
+
+	oldfs = get_fs(); 
+	set_fs(KERNEL_DS);
+	req_len = sock_recvmsg(sock, &msg, 1024, 0);                                                                                
+	set_fs(oldfs);
 
 	return 0;
 }
