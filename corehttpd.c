@@ -16,22 +16,22 @@ init_listening_socket(unsigned int address, unsigned short port, int backlog) {
 	struct socket *sock;
 	struct sockaddr_in sin;
 
-	int ret;
+	int _ret;
 
 	sin.sin_family = AF_INET;
 	sin.sin_addr.s_addr = htonl(address);
 	sin.sin_port = htons(port);
 
-	ret = sock_create(PF_INET, SOCK_STREAM, IPPROTO_TCP, &sock);
-	check_ret_value("sock_create", ret);
+	_ret = sock_create(PF_INET, SOCK_STREAM, IPPROTO_TCP, &sock);
+	check_ret_value("sock_create");
 
 	sock->sk->sk_reuse = 1;
 
-	ret = kernel_bind(sock, (struct sockaddr *) &sin, sizeof(sin));
-	check_ret_value("sock_create", ret);
+	_ret = kernel_bind(sock, (struct sockaddr *) &sin, sizeof(sin));
+	check_ret_value("sock_create");
 
-	ret = kernel_listen(sock, backlog);
-	check_ret_value("sock_create", ret);
+	_ret = kernel_listen(sock, backlog);
+	check_ret_value("sock_create");
 
 	return sock;
 }
