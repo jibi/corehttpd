@@ -9,20 +9,29 @@
 #include <net/sock.h>
 #include <net/tcp.h>
 
+#include "./debug.h"
+
 static struct socket *
 init_listening_socket(unsigned int address, unsigned short port, int backlog) {
 	struct socket *sock;
 	struct sockaddr_in sin;
 
+	int ret;
+
 	sin.sin_family = AF_INET;
 	sin.sin_addr.s_addr = htonl(address);
 	sin.sin_port = htons(port);
 
-	sock_create(PF_INET, SOCK_STREAM, IPPROTO_TCP, &sock);
+	ret = sock_create(PF_INET, SOCK_STREAM, IPPROTO_TCP, &sock);
+	check_ret_value("sock_create", ret);
+
 	sock->sk->sk_reuse = 1;
 
-	kernel_bind(sock, (struct sockaddr *) &sin, sizeof(sin));
-	kernel_listen(sock, backlog);
+	ret = kernel_bind(sock, (struct sockaddr *) &sin, sizeof(sin));
+	check_ret_value("sock_create", ret);
+
+	ret = kernel_listen(sock, backlog);
+	check_ret_value("sock_create", ret);
 
 	return sock;
 }
