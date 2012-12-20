@@ -1,4 +1,5 @@
 obj-m += corehttpd.o
+corehttpd-objs := server.o parser.o
 
 KVERSION = $(shell uname -r)
 
