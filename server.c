@@ -79,7 +79,7 @@ handle_request(void *data) {
 
 	req = new_http_request(buffer, req_len);
 
-	if (!parse_request_line(req)) {
+	if (!parse_http_request(req)) {
 		printk("request: %s\n", req->uri);
 	}
 

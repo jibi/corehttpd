@@ -19,7 +19,9 @@ struct http_request {
 	enum http_versions ver;
 	char *uri;
 	char *host;
+
+	char ok, leg;
 };
 
-char *get_line(struct http_request *hr); 
-int parse_request_line(struct http_request *hr); 
+char *get_line(struct http_request *hr);
+int parse_http_request(struct http_request *hr); 

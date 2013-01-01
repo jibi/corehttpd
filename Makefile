@@ -4,6 +4,7 @@ corehttpd-objs := server.o parser.o
 KVERSION = $(shell uname -r)
 
 all:
+	ragel parser.rl
 	make -C /lib/modules/$(KVERSION)/build M=$(PWD) modules
 
 clean:
