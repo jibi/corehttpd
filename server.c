@@ -13,6 +13,8 @@
 #include "http.h"
 #include "parser.h"
 
+struct socket *server_sock;
+
 static struct socket *
 init_listening_socket(unsigned int address, unsigned short port, int backlog) {
 	struct socket *sock;
@@ -111,13 +113,12 @@ accept_loop(void *data) {
 
 int
 init_module(void) {
-	struct socket *sock;
 	struct task_struct *accept_loop_thread;
 
 	printk(KERN_INFO "Starting corehttpd\n");
 
-	sock = init_listening_socket(INADDR_LOOPBACK, 81, 10);
-	accept_loop_thread = kthread_create(accept_loop, sock, "[corehttpd_acc_loop]");
+	server_sock = init_listening_socket(INADDR_ANY, 81, 10);
+	accept_loop_thread = kthread_create(accept_loop, server_sock, "[corehttpd_acc_loop]");
 	wake_up_process(accept_loop_thread);
 
 	return 0;
@@ -125,6 +126,6 @@ init_module(void) {
 
 void
 cleanup_module(void) {
-
+	sock_release(server_sock);
 }
 
