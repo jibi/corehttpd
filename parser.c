@@ -6,20 +6,54 @@
 #include "http.h"
 
 char *
+strncpy_null(char *dest, const char *src, ssize_t n) {
+	strncpy_null(dest, src, n);
+
+	dest[n] = '\x00';
+	return dest;
+}
+
+struct http_request *
+new_http_request(unsigned char *buffer, ssize_t len) {
+	struct http_request *req;
+
+	req = (struct http_request *) kmalloc(sizeof(struct http_request *), GFP_ATOMIC);
+
+	if (!req) {
+		return NULL;
+	}
+
+	req->req	= buffer;
+	req->len	= len;
+	req->cur	= 0;
+
+	return req;
+}
+
+char *
 get_line(struct http_request *hr) {
 	char *base, *line;
 	int len;
 	
 	base = hr->req + hr->cur;
-	line = kmalloc(MAXLINESIZE * sizeof(char), GFP_ATOMIC);
 	len = 0;
 
-	while (hr->cur < hr->len - 2 && hr->cur < MAXLINESIZE && 
-		base[len] != '\n' && base[len + 1] != '\r') { 
+	while (hr->cur < hr->len - 2 && hr->cur < MAXLINESIZE &&
+			strncmp(base + len, "\n\r", 2)) {
 		len++;
 	}
 
-	strncpy(line, base, len);
+	if (!len) {
+		return NULL;
+	}
+
+	line = kmalloc((len + 1) * sizeof(char), GFP_ATOMIC);
+
+	if (!line) {
+		return NULL;
+	}
+
+	strncpy_null(line, base, len);
 	hr->cur += len + 2;
 
 	return line;
@@ -27,15 +61,18 @@ get_line(struct http_request *hr) {
 
 int
 parse_request_line(struct http_request *hr) {
-	char *request_line = get_line(hr);
-	char *cur = request_line;
+	char *request_line;
+	char *cur;
 	int len = 0;
 	int ret;
 
 	ret = -1;
 
+	request_line = get_line(hr);
+	cur = request_line;
+
 	if (!request_line) {
-		goto leave;
+		return ret;
 	}
 
 	while (cur[len] != ' ' && cur[len]) {
@@ -62,7 +99,7 @@ parse_request_line(struct http_request *hr) {
 	  goto leave;
 	}
 
-	strncpy(hr->uri, cur, len);
+	strncpy_null(hr->uri, cur, len);
 
 	cur += len + 1;
 	len = 0;
@@ -75,9 +112,9 @@ parse_request_line(struct http_request *hr) {
 		ret = 0;
 		hr->ver = HTTP11;
 	} else if (!strncmp(cur, "HTTP/1.0", len)) {
-		hr->ver = HTTP10;
 		ret = 0;
-	} 
+		hr->ver = HTTP10;
+	}
 
 leave:
 	kfree(request_line);

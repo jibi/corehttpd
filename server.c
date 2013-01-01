@@ -9,7 +9,9 @@
 #include <net/sock.h>
 #include <net/tcp.h>
 
-#include "./debug.h"
+#include "debug.h"
+#include "http.h"
+#include "parser.h"
 
 static struct socket *
 init_listening_socket(unsigned int address, unsigned short port, int backlog) {
@@ -36,12 +38,12 @@ init_listening_socket(unsigned int address, unsigned short port, int backlog) {
 	return sock;
 }
 
-unsigned char *
-get_msg(struct socket *sock, ssize_t maxlen) {
+ssize_t
+get_msg(struct socket *sock, ssize_t maxlen, unsigned char **dst_buffer) {
 	struct msghdr msg;
 	struct iovec iov;
 	mm_segment_t oldfs;
-	int req_len;
+	ssize_t req_len;
 
 	unsigned char *buffer;
 
@@ -49,31 +51,42 @@ get_msg(struct socket *sock, ssize_t maxlen) {
 	msg.msg_iov = &iov;
 	msg.msg_iovlen = 1;
 
-	buffer = (char *) kmalloc(sizeof(unsigned char) * maxlen, GFP_ATOMIC);
+	buffer = (char *) kmalloc(sizeof(unsigned char) * (maxlen + 1), GFP_ATOMIC);
 
 	iov.iov_base = buffer;
 	iov.iov_len = (size_t) maxlen * sizeof(char);
 
-	oldfs = get_fs(); 
+	oldfs = get_fs();
 	set_fs(KERNEL_DS);
-	req_len = sock_recvmsg(sock, &msg, maxlen, 0);                                                                                
+	req_len = sock_recvmsg(sock, &msg, maxlen, 0);
 	set_fs(oldfs);
 
-	return buffer;
+	buffer[req_len] = '\x00';
+
+	*dst_buffer = buffer;
+	return req_len;
 }
 
-static int 
+static int
 handle_request(void *data) {
 	struct socket *sock;
 	unsigned char *buffer;
+	struct http_request *req;
+	ssize_t req_len;
 
 	sock = (struct socket *) data;
-	buffer = get_msg(sock, 1024);
+	req_len = get_msg(sock, 1024, &buffer);
+
+	req = new_http_request(buffer, req_len);
+
+	if (!parse_request_line(req)) {
+		printk("request: %s\n", req->uri);
+	}
 
 	return 0;
 }
 
-static int 
+static int
 accept_loop(void *data) {
 	struct socket *sock;
 	int _ret;
