@@ -40,8 +40,31 @@ init_listening_socket(unsigned int address, unsigned short port, int backlog) {
 	return sock;
 }
 
+
 ssize_t
-get_msg(struct socket *sock, ssize_t maxlen, unsigned char **dst_buffer) {
+send_msg(struct socket *sock, unsigned char *src_buffer, ssize_t len) {
+	struct msghdr msg;
+	struct iovec iov;
+	mm_segment_t oldfs;
+	int size = 0;
+
+	memset(&msg, 0, sizeof(struct msghdr));
+	msg.msg_iov = &iov;
+	msg.msg_iovlen = 1;
+
+	iov.iov_base = src_buffer;
+	iov.iov_len = len;
+
+	oldfs = get_fs();
+	set_fs(KERNEL_DS);
+	size = sock_sendmsg(sock,&msg,len);
+	set_fs(oldfs);
+
+	return size;
+}
+
+ssize_t
+recv_msg(struct socket *sock, unsigned char **dst_buffer, ssize_t maxlen) {
 	struct msghdr msg;
 	struct iovec iov;
 	mm_segment_t oldfs;
@@ -77,7 +100,7 @@ handle_request(void *data) {
 	ssize_t req_len;
 
 	sock = (struct socket *) data;
-	req_len = get_msg(sock, 1024, &buffer);
+	req_len = recv_msg(sock, &buffer, 1024);
 
 	req = new_http_request(buffer, req_len);
 
