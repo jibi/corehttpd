@@ -3,21 +3,23 @@
 #include <linux/slab.h>
 #include <linux/string.h>
 
-#include "http.h"
+#include "parser.h"
 
 /*
  * based on puma http parser
  * see https://github.com/puma/puma
  */
 
-int
-get_marked_string(char **buffer, char *fpc, char *mark) {
-	*buffer = kmalloc((fpc - mark + 1) * sizeof(char), GFP_ATOMIC);
+char *
+get_marked_string(char *fpc, char *mark) {
+	char *buffer;
 
-	strncpy(*buffer, mark, fpc - mark);
-	(*buffer)[fpc - mark] = 0;
+	buffer = (char *) kmalloc((fpc - mark + 1) * sizeof(char), GFP_ATOMIC);
 
-	return 1;
+	strncpy(buffer, mark, fpc - mark);
+	buffer[fpc - mark] = 0;
+
+	return buffer;
 }
 
 %%{
@@ -28,7 +30,7 @@ get_marked_string(char **buffer, char *fpc, char *mark) {
 	}
 
 	action request_uri {
-		get_marked_string(&(req->uri), fpc, mark);
+		req->uri = get_marked_string(fpc, mark);
 	}
 
 	action fragment {
@@ -38,7 +40,7 @@ get_marked_string(char **buffer, char *fpc, char *mark) {
 	action request_method {
 		char *tmp;
 
-		get_marked_string(&tmp, fpc, mark);
+		tmp = get_marked_string(fpc, mark);
 
 		if (!strcmp(tmp, "GET")) {
 			req->method = GET;
@@ -47,12 +49,14 @@ get_marked_string(char **buffer, char *fpc, char *mark) {
 		} else {
 			req->leg = 0;
 		}
+
+		kfree(tmp);
 	}
 
 	action http_version {
 		char *tmp;
 
-		get_marked_string(&tmp, fpc, mark);
+		tmp = get_marked_string(fpc, mark);
 
 		if (!strcmp(tmp, "HTTP/1.0")) {
 			req->ver = HTTP10;
@@ -61,6 +65,8 @@ get_marked_string(char **buffer, char *fpc, char *mark) {
 		} else {
 			req->leg = 0;
 		}
+
+		kfree(tmp);
 	}
 
 	action write_field {
@@ -73,7 +79,7 @@ get_marked_string(char **buffer, char *fpc, char *mark) {
 
 	action done {
 		if (req->leg) {
-			req->ok = 1;
+			req->parsed = 1;
 		}
 	}
 
@@ -124,7 +130,7 @@ get_marked_string(char **buffer, char *fpc, char *mark) {
 %% write data;
 
 struct http_request *
-new_http_request(unsigned char *buffer, ssize_t len) {
+new_http_request(char *buffer, ssize_t len) {
 	struct http_request *req;
 
 	req = (struct http_request *) kmalloc(sizeof(struct http_request *), GFP_ATOMIC);
@@ -135,9 +141,9 @@ new_http_request(unsigned char *buffer, ssize_t len) {
 
 	req->req	= buffer;
 	req->len	= len;
-	req->cur	= 0;
-	req->ok		= 0;
+	req->parsed	= 0;
 	req->leg	= 1;
+	req->cs		= http_parser_start;
 
 	return req;
 }
@@ -146,13 +152,24 @@ int
 parse_http_request(struct http_request *req) {
 	int cs;
 	char *mark = NULL;
+	char *p, *pe;
 
-	char *p = req->req;
-	char *pe = p + req->len + 1;
+	cs = req->cs;
+	p = req->req;
+	pe = p + req->len;
 
-	%% write init;
 	%% write exec;
+
+	req->cs = cs;
+
+	if (strlen(p) > 0) {
+		req->next_req = p;
+		req->next_req_len = strlen(p);
+	} else {
+		req->next_req = NULL;
+	}
 	
 	return 0;
 }
 
+// vim: filetype=c

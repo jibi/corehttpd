@@ -10,7 +10,6 @@
 #include <net/tcp.h>
 
 #include "debug.h"
-#include "http.h"
 #include "parser.h"
 
 struct socket *server_sock;
@@ -40,9 +39,8 @@ init_listening_socket(unsigned int address, unsigned short port, int backlog) {
 	return sock;
 }
 
-
 ssize_t
-send_msg(struct socket *sock, unsigned char *src_buffer, ssize_t len) {
+send_msg(struct socket *sock, char *src_buffer, ssize_t len) {
 	struct msghdr msg;
 	struct iovec iov;
 	mm_segment_t oldfs;
@@ -64,19 +62,19 @@ send_msg(struct socket *sock, unsigned char *src_buffer, ssize_t len) {
 }
 
 ssize_t
-recv_msg(struct socket *sock, unsigned char **dst_buffer, ssize_t maxlen) {
+recv_msg(struct socket *sock, char **dst_buffer, ssize_t maxlen) {
 	struct msghdr msg;
 	struct iovec iov;
 	mm_segment_t oldfs;
 	ssize_t req_len;
 
-	unsigned char *buffer;
+	char *buffer;
 
 	memset(&msg, 0, sizeof(struct msghdr));
 	msg.msg_iov = &iov;
 	msg.msg_iovlen = 1;
 
-	buffer = (char *) kmalloc(sizeof(unsigned char) * (maxlen + 1), GFP_ATOMIC);
+	buffer = (char *) kmalloc(sizeof(char) * (maxlen + 1), GFP_ATOMIC);
 
 	iov.iov_base = buffer;
 	iov.iov_len = (size_t) maxlen * sizeof(char);
@@ -92,20 +90,69 @@ recv_msg(struct socket *sock, unsigned char **dst_buffer, ssize_t maxlen) {
 	return req_len;
 }
 
+/* Get next chunk of request string.
+ * If next_req is not NULL, new request data starts from that pointer.
+ * If partial is set, current request is not completly parsed and only req and
+ * len need to be updated */
+
+static int
+get_request (struct socket *sock, struct http_request **req, char *next_req,
+	int next_req_len, char partial) {
+
+	char *str;
+	ssize_t len;
+
+	if (next_req) {
+		str = next_req;
+		len = next_req_len;
+	} else {
+		len = recv_msg(sock, &str, 1024);
+
+		if (len <= 0) {
+			kfree(str);
+			return -1;
+		}
+	}
+
+	if (partial) {
+		(*req)->req = str;
+		(*req)->len = len;
+	} else {
+		*req = new_http_request(str, len);
+	}
+
+	return 0;
+}
+
 static int
 handle_request(void *data) {
 	struct socket *sock;
-	unsigned char *buffer;
-	struct http_request *req;
-	ssize_t req_len;
+	struct http_request *req = NULL;
+
+	char *next_req = NULL;
+	int next_req_len = 0;
 
 	sock = (struct socket *) data;
-	req_len = recv_msg(sock, &buffer, 1024);
 
-	req = new_http_request(buffer, req_len);
+	while (!get_request(sock, &req, next_req, next_req_len, 0)) {
 
-	if (!parse_http_request(req)) {
+		parse_http_request(req);
+
+		while (!req->parsed) {
+			if (!get_request(sock, &req, 0, 0, 1)) {
+				parse_http_request(req);
+			} else {
+				return -1;
+			}
+		}
+
 		printk("request: %s\n", req->uri);
+
+		/* send response */
+
+		/* TODO free old req */
+		next_req = req->next_req;
+		next_req_len = req->next_req_len;
 	}
 
 	return 0;
@@ -118,7 +165,7 @@ accept_loop(void *data) {
 	
 	sock = (struct socket *) data;
 
-	while (1) {
+/*	while (1) */ {
 		struct socket *new_sock;
 		struct task_struct *handle_request_thread;
 
@@ -152,3 +199,4 @@ cleanup_module(void) {
 	sock_release(server_sock);
 }
 
+MODULE_LICENSE("GPL");

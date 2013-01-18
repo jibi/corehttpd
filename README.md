@@ -2,4 +2,5 @@ corehttpd
 =============
 
 Experimental linux web server running in kernel space.
-Nothing to see yet.
+
+At the moment all you can expect from this module are random kernel panics.
